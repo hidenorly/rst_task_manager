@@ -17,6 +17,7 @@
 use std::thread;
 use std::time::Duration;
 
+#[derive(Clone)]
 pub struct Task
 {
     id : String,
@@ -28,7 +29,8 @@ impl Task
 {
     fn on_execute( &self ){
         if let false = self.is_stopping  {
-            println!("on_execute");
+            println!("on_execute:{}", &self.id);
+            thread::sleep(Duration::from_millis(1));
         }
     }
 
@@ -62,13 +64,15 @@ impl Task
 pub struct TaskManager
 {
     tasks : Vec<Task>,
+    max_concurrency : i32,
 }
 
 impl TaskManager
 {
-    pub fn new() -> Self {
+    pub fn new( max_concurrency : i32 ) -> Self {
         Self {
             tasks : Vec::new(),
+            max_concurrency : max_concurrency,
         }
     }
 
@@ -77,10 +81,28 @@ impl TaskManager
     }
 
     pub fn execute( &mut self ){
-        // TODO: execute the task in thread::spawn
+        let mut handles = Vec::new();
+
+        let mut count = 0;
         for _task in &self.tasks {
-            println!( "task:{}", _task.id )
+            let mut task = _task.clone();
+            handles.push( thread::spawn( move || {
+                task.execute();
+            } ) );
+            count = count + 1;
+            if count >= self.max_concurrency {
+                break;
+            }
         }
+
+        for handle in handles{
+            let _ = handle.join();
+        }
+
+        for _i in 0..count {
+            let _ = &self.tasks.remove(0);
+        }
+
     }
 
     pub fn cancel_task( &mut self, _id : String ){
@@ -101,28 +123,8 @@ impl TaskManager
 }
 
 fn main() {
-    // test case for Task
-    let mut handles = Vec::new();
-
-    for x in 0..10 {
-        let x : i32 = x;
-        let mut task = Task::new( x.to_string() );
-        println!("task:{}", x);
-        handles.push( thread::spawn( move || {
-            task.execute();
-            thread::sleep(Duration::from_millis(1));
-        } ) );
-    }
-
-    thread::sleep(Duration::from_millis(1));
-
-    for handle in handles{
-        let _ = handle.join();
-    }
-
-
     // test case for TaskManager
-    let mut task_manager = TaskManager::new();
+    let mut task_manager = TaskManager::new( 4 );
 
     for _x in 0..10 {
         let x : i32 = _x;
@@ -132,7 +134,15 @@ fn main() {
 
     task_manager.execute();
 
-    for _x in 0..10 {
+    for _x in 11..20 {
+        let x : i32 = _x;
+        let task = Task::new( x.to_string() );
+        task_manager.add_task( task );
+    }
+
+    task_manager.execute();
+
+    for _x in 0..20 {
         let x : i32 = _x;
         task_manager.cancel_task( x.to_string() );
     }
