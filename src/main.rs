@@ -82,16 +82,20 @@ impl TaskManager
 
     pub fn execute( &mut self ){
         let mut handles = Vec::new();
+        let mut handled_tasks = Vec::new();
 
         let mut count = 0;
         for _task in &self.tasks {
-            let mut task = _task.clone();
-            handles.push( thread::spawn( move || {
-                task.execute();
-            } ) );
-            count = count + 1;
-            if count >= self.max_concurrency {
-                break;
+            if !_task.is_running() {
+                handled_tasks.push( _task.id.clone() );
+                let mut task = _task.clone();
+                handles.push( thread::spawn( move || {
+                    task.execute();
+                } ) );
+                count = count + 1;
+                if count >= self.max_concurrency {
+                    break;
+                }
             }
         }
 
@@ -99,27 +103,35 @@ impl TaskManager
             let _ = handle.join();
         }
 
-        for _i in 0..count {
-            let _ = &self.tasks.remove(0);
+        for _i in handled_tasks {
+            self.remove_task( _i, false );
         }
-
     }
 
-    pub fn cancel_task( &mut self, _id : String ){
+    pub fn remove_task( &mut self, _id : String, is_stop_task : bool ){
         let not_found_index = -1;
         let mut found_index : i32 = not_found_index;
         let mut index : i32 = 0;
         for _task in &self.tasks {
             if _id == _task.id {
                 found_index = index;
+                break;
             }
             index = index + 1;
         }
         if not_found_index != found_index {
             let found_index : usize = found_index as usize;
-            self.tasks.remove( found_index );
+            if is_stop_task && self.tasks[ found_index ].is_running() {
+                // TODO: join the task's thread
+            }
+            let _ = self.tasks.remove( found_index );
         }
     }
+
+    pub fn cancel_task( &mut self, _id : String ){
+        self.remove_task( _id, true );
+    }
+
 }
 
 fn main() {
