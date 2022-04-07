@@ -17,6 +17,32 @@
 use std::thread;
 use std::time::Duration;
 
+trait ITask
+{
+    fn set_id( &mut self, id : String );
+    fn get_id( &self ) -> String;
+    fn set_running_state( &mut self, is_running : bool );
+    fn is_running( &self ) -> bool;
+    fn set_stopping( &mut self, is_stopping : bool );
+    fn is_stopping( &self ) -> bool;
+
+    fn on_execute( &self );
+    fn new( id : String ) -> Self;
+
+    fn execute( &mut self ){
+        self.set_running_state( true );
+        self.set_stopping( false );
+        self.on_execute();
+        self.set_running_state( false );
+    }
+    fn cancel( &mut self ) {
+        if let true = self.is_running() {
+            self.set_stopping( true );
+        }
+    }
+}
+
+
 #[derive(Clone)]
 pub struct Task
 {
@@ -25,33 +51,45 @@ pub struct Task
     is_stopping : bool,
 }
 
-impl Task
+impl ITask for Task
 {
+    fn set_id( &mut self, id : String )
+    {
+        self.id = id;
+    }
+
+    fn get_id( &self ) -> String
+    {
+        self.id.clone()
+    }
+
+    fn set_running_state( &mut self, is_running : bool )
+    {
+        self.is_running = is_running;
+    }
+
+    fn is_running( &self ) -> bool {
+        self.is_running
+    }
+
+    fn set_stopping( &mut self, is_stopping : bool )
+    {
+        self.is_stopping = is_stopping;
+    }
+
+    fn is_stopping( &self ) -> bool
+    {
+        self.is_stopping
+    }
+
     fn on_execute( &self ){
-        if let false = self.is_stopping  {
+        if let false = self.is_stopping()  {
             println!("on_execute:{}", &self.id);
             thread::sleep(Duration::from_millis(1));
         }
     }
 
-    pub fn execute( &mut self ){
-        self.is_running = true;
-        self.is_stopping = false;
-        self.on_execute();
-        self.is_running = false;
-    }
-
-    pub fn is_running( &self ) -> bool {
-        self.is_running
-    }
-
-    pub fn cancel( &mut self ) {
-        if let true = self.is_running {
-            self.is_stopping = true
-        }
-    }
-
-    pub fn new( id : String ) -> Self {
+    fn new( id : String ) -> Self {
         Self {
             id : id,
             is_running : false,
