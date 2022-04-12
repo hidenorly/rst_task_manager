@@ -16,6 +16,7 @@
 
 use std::thread;
 use std::time::Duration;
+use std::collections::HashMap;
 
 trait ITask
 {
@@ -103,6 +104,7 @@ pub struct TaskManager
 {
     tasks : Vec<Task>,
     max_concurrency : i32,
+    threads : HashMap<String, std::thread::JoinHandle<()>>,
 }
 
 impl TaskManager
@@ -111,6 +113,7 @@ impl TaskManager
         Self {
             tasks : Vec::new(),
             max_concurrency : max_concurrency,
+            threads : HashMap::new(),
         }
     }
 
@@ -119,15 +122,15 @@ impl TaskManager
     }
 
     pub fn execute( &mut self ){
-        let mut handles = Vec::new();
         let mut handled_tasks = Vec::new();
 
         let mut count = 0;
         for _task in &self.tasks {
             if !_task.is_running() {
                 handled_tasks.push( _task.id.clone() );
+                // TODO: not clone, pass the reference
                 let mut task = _task.clone();
-                handles.push( thread::spawn( move || {
+                self.threads.insert( _task.id.clone(), thread::spawn( move || {
                     task.execute();
                 } ) );
                 count = count + 1;
@@ -135,10 +138,6 @@ impl TaskManager
                     break;
                 }
             }
-        }
-
-        for handle in handles{
-            let _ = handle.join();
         }
 
         for _i in handled_tasks {
@@ -160,7 +159,10 @@ impl TaskManager
         if not_found_index != found_index {
             let found_index : usize = found_index as usize;
             if is_stop_task && self.tasks[ found_index ].is_running() {
-                // TODO: join the task's thread
+                self.tasks[ found_index ].is_stopping = true;
+                if let Some(the_thread) = self.threads.remove( &_id ) {
+                    the_thread.join().unwrap();
+                }
             }
             let _ = self.tasks.remove( found_index );
         }
@@ -169,7 +171,19 @@ impl TaskManager
     pub fn cancel_task( &mut self, _id : String ){
         self.remove_task( _id, true );
     }
+}
 
+impl Drop for TaskManager {
+    fn drop(&mut self){
+        let mut task_ids = Vec::new();
+        for _task in &self.tasks {
+            task_ids.push( _task.id.clone() );
+        }
+
+        for task_id in task_ids {
+            self.remove_task( task_id, true );
+        }
+    }
 }
 
 fn main() {
